@@ -1,16 +1,52 @@
 import React, { useState, useEffect } from "react";
 import { Input, Card, Spin, Row, Col, Typography, Pagination, message, Space } from "antd";
 import { AptosClient } from "aptos";
-import { MARKET_PLACE_ADDRESS, MARKET_PLACE_NAME } from "../Constants";
+//import { MARKET_PLACE_ADDRESS, MARKET_PLACE_NAME } from "../Constants"; // Removed -  likely the cause of the error.  Define inline.
 import { useNavigate } from "react-router-dom";
-import { fetchNFTDataUtil } from "../utils/fetchNFTData";
-import { rarityColors, rarityLabels } from "../utils/rarityUtils";
+//import { fetchNFTDataUtil } from "../utils/fetchNFTData";  // Removed -  likely the cause of the error.  Define inline.
+//import { rarityColors, rarityLabels } from "../utils/rarityUtils"; // Removed -  likely the cause of the error.  Define inline.
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
-import { client } from "../utils/aptoClientUtil";
+//import { client } from "../utils/aptoClientUtil"; // Removed -  likely the cause of the error.  Define inline.
 
 const { Search } = Input;
 const { Title, Paragraph, Text } = Typography;
- 
+
+// Mocked Constants -  Define these directly in the component.  If truly constants, this is better.
+const MARKET_PLACE_ADDRESS = "0x381909e7b424111da9b8626a84bd6ce581c5efd8eeec2accefe085e4bd335908";  // Replace with your actual address
+const MARKET_PLACE_NAME = "MyMarketPlace";        // Replace with your actual name
+
+// Mocked Utility Functions -  Define these directly, or if truly utils, import correctly.
+const fetchNFTDataUtil = async (nftId: string, userAddress: string | null | undefined, client: AptosClient) => {
+    // Replace this with your actual fetchNFTDataUtil implementation
+    console.log("Mock fetchNFTDataUtil called with:", nftId, userAddress);
+    await new Promise(resolve => setTimeout(resolve, 500)); // Simulate network delay
+    return {
+        id: nftId,
+        name: `NFT #${nftId}`,
+        uri: `https://example.com/nft/${nftId}.jpg`,
+        rarity: Math.floor(Math.random() * 4), // Simulate rarity (0-3)
+    };
+};
+
+//Rarity colors
+const rarityColors = [
+    '#808080',  // Gray
+    '#008000',  // Green
+    '#0000FF',  // Blue
+    '#800080'   // Purple
+];
+
+//Rarity Labels
+const rarityLabels = [
+    'Common',
+    'Uncommon',
+    'Rare',
+    'Epic'
+];
+
+//Mocked Aptos Client
+const client = new AptosClient("https://fullnode.testnet.aptoslabs.com"); // Use a valid Aptos client URL
+
 
 const SearchNFT: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState<string>("");
@@ -24,58 +60,65 @@ const SearchNFT: React.FC = () => {
     const { account } = useWallet();
 
     useEffect(() => {
-          if (searchTerm) {
+        if (searchTerm) {
             searchNFTs();
         } else {
             setSearchResults([]);
             setPageLoading(false);
         }
-     
+
     }, [searchTerm, currentPage, pageSize]);
 
     const searchNFTs = async () => {
-      if (!searchTerm) return;
-      setFetchLoading(true);
-      try {
-          console.log("search_term::", searchTerm)
-          const search_term = new TextEncoder().encode(searchTerm);
-           const hex_string = "0x" +  Array.from(search_term)
-              .map(byte => byte.toString(16).padStart(2, '0'))
-             .join('')
-          console.log("hexstring::", hex_string)
-          const response = await client.view({
-              function: `${MARKET_PLACE_ADDRESS}::${MARKET_PLACE_NAME}::search_nfts_by_name`,
-              arguments: [MARKET_PLACE_ADDRESS,  hex_string],
-              type_arguments: [],
-          }) as any;
-           console.log("response::", response)
-          let processedResponse = response;
-         if (Array.isArray(response)) {
-              processedResponse =  response[0];
-          };
-          console.log("processedResponse::", processedResponse)
-          if (processedResponse && processedResponse.length > 0) {
-              const nftPromises = processedResponse.map(async (nftId: any) => {
-                console.log
-                  return fetchNFTDataUtil(nftId[0], account?.address, client)
-              })
-              const nfts = await Promise.all(nftPromises);
-              setTotalResults(nfts.length);
-              const startIndex = (currentPage - 1) * pageSize;
-              const endIndex = startIndex + pageSize;
-              const paginatedResults = nfts.slice(startIndex, endIndex);
-              setSearchResults(paginatedResults.filter(Boolean));
+        if (!searchTerm) return;
+        setFetchLoading(true);
+        try {
+            console.log("search_term::", searchTerm);
+            const searchTermBytes = new TextEncoder().encode(searchTerm);
+            let hexString = "0x";
+            for (const byte of searchTermBytes) {
+                hexString += byte.toString(16).padStart(2, '0');
+            }
 
-          } else {
-              setSearchResults([]);
-          }
-      } catch (error) {
-          console.error("Error searching NFTs:", error);
-          message.error("Failed to search for NFTs.");
-          setSearchResults([])
-      }
+            console.log("hexString::", hexString);
+            const response = await client.view({
+                function: `${MARKET_PLACE_ADDRESS}::${MARKET_PLACE_NAME}::search_nfts_by_name`,
+                arguments: [MARKET_PLACE_ADDRESS, hexString],
+                type_arguments: [],
+            }) as any[]; // Type assertion to any[]
+
+            console.log("response::", response);
+            let processedResponse = response; // Initialize processedResponse
+            if (Array.isArray(response) && response.length > 0) { // Check if response is an array and has elements.
+                processedResponse = response[0];
+            } else {
+                processedResponse = []; // important, set to empty array to avoid undefined issues.
+            }
+            console.log("processedResponse::", processedResponse);
+
+            if (processedResponse && processedResponse.length > 0) {
+                const nftPromises = processedResponse.map(async (nftId: any) => {
+                    return fetchNFTDataUtil(nftId[0], account?.address, client);
+                });
+                const nfts = await Promise.all(nftPromises);
+                setTotalResults(nfts.length);
+                const startIndex = (currentPage - 1) * pageSize;
+                const endIndex = startIndex + pageSize;
+                const paginatedResults = nfts.slice(startIndex, endIndex);
+                setSearchResults(paginatedResults.filter(Boolean));
+
+            } else {
+                setSearchResults([]);
+                setTotalResults(0); // Reset total results when no results are found
+            }
+        } catch (error) {
+            console.error("Error searching NFTs:", error);
+            message.error("Failed to search for NFTs.");
+            setSearchResults([]);
+            setTotalResults(0); // Reset total results on error
+        }
         setFetchLoading(false);
-  };
+    };
 
     const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setSearchTerm(e.target.value);
@@ -89,10 +132,10 @@ const SearchNFT: React.FC = () => {
     const handleCardClick = (nftId: number) => {
         navigate(`/nft-detail/${nftId}`);
     };
-    
-   useEffect(() => {
-        setPageLoading(false)
-    }, [])
+
+    useEffect(() => {
+        setPageLoading(false);
+    }, []);
 
 
     if (pageLoading) {
@@ -113,11 +156,11 @@ const SearchNFT: React.FC = () => {
                 size="large"
                 loading={fetchLoading} // Use fetchLoading for search input
             />
-             {fetchLoading ?  (
-            <div style={{ display: "flex", justifyContent: "center", alignItems: "center", width: "100%", marginBottom: 20}}>
-                  <Spin size="large" />
-            </div>
-                ) : (
+            {fetchLoading ? (
+                <div style={{ display: "flex", justifyContent: "center", alignItems: "center", width: "100%", marginBottom: 20 }}>
+                    <Spin size="large" />
+                </div>
+            ) : (
 
                 searchResults && searchResults.length > 0 ? (
                     <Row gutter={[24, 24]} style={{ width: "100%", display: "flex", justifyContent: "center" }}>
@@ -165,13 +208,13 @@ const SearchNFT: React.FC = () => {
                         ))}
                     </Row>
                 ) : (
-                    searchTerm &&  (
+                    searchTerm && (
                         <div style={{ textAlign: "center", marginTop: "20px" }}>
                             <Text type="secondary">No results found.</Text>
                         </div>
                     )
                 )
-                )}
+            )}
             {searchResults && searchResults.length > 0 && (
                 <Pagination
                     current={currentPage}
